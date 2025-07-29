@@ -1,10 +1,18 @@
 # app.py
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime, timedelta
+from datetime import datetime
 from database import DatabaseManager
 
+# 嘗試導入 tkcalendar，如果失敗則提示使用者安裝
+try:
+    from tkcalendar import Calendar
+    calendar_available = True
+except ImportError:
+    calendar_available = False
+
 class TimeTrackerApp:
+    # ... (這個 class 的內容完全沒有變動，直接複製舊版的即可) ...
     def __init__(self, root):
         self.root = root
         self.root.title("事件計時器")
@@ -63,7 +71,6 @@ class TimeTrackerApp:
         description = self.description_entry.get().strip()
         self.start_time = datetime.now()
         
-        # 插入一筆新紀錄並取得ID
         start_time_str = self.start_time.strftime("%Y-%m-%d %H:%M:%S")
         self.current_event_id = self.db.insert_event(event_name, description, start_time_str)
 
@@ -78,8 +85,6 @@ class TimeTrackerApp:
             return
 
         elapsed_time = datetime.now() - self.start_time
-        
-        # 格式化為 HH:MM:SS
         total_seconds = int(elapsed_time.total_seconds())
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
@@ -87,7 +92,6 @@ class TimeTrackerApp:
         
         self.timer_label.config(text=f"{hours:02d}:{minutes:02d}:{seconds:02d}")
         
-        # 檢查休息提醒
         if 25 * 60 <= total_seconds < 30 * 60 and not self.reminder_shown:
             messagebox.showinfo("休息提醒", "已經25分鐘了，該休息一下囉！\n(此提醒只會出現一次)")
             self.reminder_shown = True
@@ -101,7 +105,6 @@ class TimeTrackerApp:
 
         end_time = datetime.now()
         end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-        
         self.db.update_event_end_time(self.current_event_id, end_time_str)
 
         self.timer_running = False
@@ -113,7 +116,6 @@ class TimeTrackerApp:
         self.reset_fields()
 
     def update_ui_for_timer_start(self):
-        """計時開始時更新UI狀態"""
         self.start_button.config(state=tk.DISABLED)
         self.finish_button.config(state=tk.NORMAL)
         self.history_button.config(state=tk.DISABLED)
@@ -121,7 +123,6 @@ class TimeTrackerApp:
         self.description_entry.config(state=tk.DISABLED)
 
     def update_ui_for_timer_stop(self):
-        """計時結束時更新UI狀態"""
         self.start_button.config(state=tk.NORMAL)
         self.finish_button.config(state=tk.DISABLED)
         self.history_button.config(state=tk.NORMAL)
@@ -129,7 +130,6 @@ class TimeTrackerApp:
         self.description_entry.config(state=tk.NORMAL)
 
     def reset_fields(self):
-        """重置輸入欄位和計時器"""
         self.event_name_entry.delete(0, tk.END)
         self.description_entry.delete(0, tk.END)
         self.timer_label.config(text="00:00:00")
@@ -137,11 +137,12 @@ class TimeTrackerApp:
         self.start_time = None
 
     def open_history_window(self):
-        """打開歷史紀錄視窗"""
+        if not calendar_available:
+            messagebox.showerror("缺少套件", "此功能需要 'tkcalendar' 套件。\n請使用 'pip install tkcalendar' 安裝後再試。")
+            return
         HistoryWindow(self.root, self.db)
 
     def on_closing(self):
-        """處理關閉視窗事件"""
         if self.timer_running:
             if messagebox.askyesno("警告", "計時器仍在執行中，確定要結束嗎？\n(目前的進度將不會被儲存結束時間)"):
                 self.db.close()
@@ -150,76 +151,142 @@ class TimeTrackerApp:
             self.db.close()
             self.root.destroy()
 
-
 class HistoryWindow:
     def __init__(self, parent, db_manager):
         self.db = db_manager
         self.window = tk.Toplevel(parent)
         self.window.title("歷史事件紀錄")
-        self.window.geometry("800x400")
+        # Bug Fix: 增加視窗寬度以容納所有欄位和查詢元件
+        self.window.geometry("1000x600")
 
         self.create_widgets()
-        self.populate_tree()
+        self.perform_search() # 初始載入時執行一次預設查詢
 
     def create_widgets(self):
-        """創建歷史視窗的元件"""
-        frame = ttk.Frame(self.window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        # --- Treeview (表格) ---
-        columns = ('id', 'name', 'desc', 'start_date', 'start_time', 'end_date', 'end_time', 'duration')
-        self.tree = ttk.Treeview(frame, columns=columns, show='headings')
-        
-        # 定義欄位標題
-        self.tree.heading('id', text='ID')
-        self.tree.heading('name', text='事件名稱')
-        self.tree.heading('desc', text='說明')
-        self.tree.heading('start_date', text='開始日期')
-        self.tree.heading('start_time', text='開始時間')
-        self.tree.heading('end_date', text='結束日期')
-        self.tree.heading('end_time', text='結束時間')
-        self.tree.heading('duration', text='時長')
+        """創建歷史視窗的所有元件，包含查詢區和結果區"""
+        main_frame = ttk.Frame(self.window, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame.grid_rowconfigure(1, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
 
-        # 定義欄位寬度
-        self.tree.column('id', width=40, anchor=tk.CENTER)
-        self.tree.column('name', width=150)
-        self.tree.column('desc', width=200)
-        self.tree.column('start_date', width=100, anchor=tk.CENTER)
-        self.tree.column('start_time', width=80, anchor=tk.CENTER)
-        self.tree.column('end_date', width=100, anchor=tk.CENTER)
-        self.tree.column('end_time', width=80, anchor=tk.CENTER)
-        self.tree.column('duration', width=80, anchor=tk.CENTER)
+        # --- 查詢條件區 ---
+        search_frame = ttk.LabelFrame(main_frame, text="查詢條件", padding="10")
+        search_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         
-        # 加入滾動條
-        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.tree.yview)
+        # 日期
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        ttk.Label(search_frame, text="開始日期:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.start_date_entry = ttk.Entry(search_frame)
+        self.start_date_entry.grid(row=0, column=1, padx=5, pady=5)
+        self.start_date_entry.insert(0, today_str)
+        ttk.Button(search_frame, text="📅", width=3, command=lambda: self.open_calendar(self.start_date_entry)).grid(row=0, column=2)
+
+        ttk.Label(search_frame, text="結束日期:").grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        self.end_date_entry = ttk.Entry(search_frame)
+        self.end_date_entry.grid(row=0, column=4, padx=5, pady=5)
+        self.end_date_entry.insert(0, today_str)
+        ttk.Button(search_frame, text="📅", width=3, command=lambda: self.open_calendar(self.end_date_entry)).grid(row=0, column=5)
+
+        # 文字搜尋
+        ttk.Label(search_frame, text="事件名稱:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.name_search_entry = ttk.Entry(search_frame, width=25)
+        self.name_search_entry.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
+
+        ttk.Label(search_frame, text="說明:").grid(row=1, column=3, padx=5, pady=5, sticky="w")
+        self.desc_search_entry = ttk.Entry(search_frame, width=25)
+        self.desc_search_entry.grid(row=1, column=4, columnspan=2, padx=5, pady=5, sticky="ew")
+        
+        # 查詢按鈕
+        search_button_frame = ttk.Frame(search_frame)
+        search_button_frame.grid(row=0, column=6, rowspan=2, padx=20)
+        ttk.Button(search_button_frame, text="執行查詢", command=self.perform_search).pack(pady=2, fill=tk.X)
+        ttk.Button(search_button_frame, text="重設條件", command=self.reset_search).pack(pady=2, fill=tk.X)
+
+
+        # --- Treeview (結果表格) ---
+        tree_frame = ttk.Frame(main_frame)
+        tree_frame.grid(row=1, column=0, sticky="nsew")
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        columns = ('id', 'name', 'desc', 'start_date', 'start_time', 'end_date', 'end_time', 'duration')
+        self.tree = ttk.Treeview(tree_frame, columns=columns, show='headings')
+        
+        # ... (欄位定義與舊版相同)
+        self.tree.heading('id', text='ID'); self.tree.column('id', width=40, anchor=tk.CENTER)
+        self.tree.heading('name', text='事件名稱'); self.tree.column('name', width=150)
+        self.tree.heading('desc', text='說明'); self.tree.column('desc', width=200)
+        self.tree.heading('start_date', text='開始日期'); self.tree.column('start_date', width=100, anchor=tk.CENTER)
+        self.tree.heading('start_time', text='開始時間'); self.tree.column('start_time', width=80, anchor=tk.CENTER)
+        self.tree.heading('end_date', text='結束日期'); self.tree.column('end_date', width=100, anchor=tk.CENTER)
+        self.tree.heading('end_time', text='結束時間'); self.tree.column('end_time', width=80, anchor=tk.CENTER)
+        self.tree.heading('duration', text='時長'); self.tree.column('duration', width=80, anchor=tk.CENTER)
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
-        
         self.tree.grid(row=0, column=0, sticky='nsew')
         scrollbar.grid(row=0, column=1, sticky='ns')
 
-        frame.grid_rowconfigure(0, weight=1)
-        frame.grid_columnconfigure(0, weight=1)
+        # --- 底部按鈕區 ---
+        bottom_button_frame = ttk.Frame(main_frame)
+        bottom_button_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        ttk.Button(bottom_button_frame, text="刪除選定項目", command=self.delete_selected).pack(side=tk.LEFT, padx=5)
+        ttk.Button(bottom_button_frame, text="關閉", command=self.window.destroy).pack(side=tk.RIGHT, padx=5)
 
-        # --- 按鈕 ---
-        button_frame = ttk.Frame(frame)
-        button_frame.grid(row=1, column=0, columnspan=2, pady=10)
+    def open_calendar(self, entry_widget):
+        """打開日曆選擇器並將選定的日期填入指定的 Entry"""
+        def set_date():
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, cal.get_date())
+            top.destroy()
 
-        ttk.Button(button_frame, text="刪除選定項目", command=self.delete_selected).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="重新整理", command=self.populate_tree).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="關閉", command=self.window.destroy).pack(side=tk.LEFT, padx=5)
+        top = tk.Toplevel(self.window)
+        try:
+            current_date = datetime.strptime(entry_widget.get(), "%Y-%m-%d")
+        except ValueError:
+            current_date = datetime.now()
+        
+        cal = Calendar(top, selectmode='day', year=current_date.year, month=current_date.month, day=current_date.day,
+                       date_pattern='y-mm-dd')
+        cal.pack(pady=10)
+        ttk.Button(top, text="確定", command=set_date).pack()
 
-    def populate_tree(self):
-        """從資料庫讀取資料並填入Treeview"""
-        # 清空舊資料
+    def perform_search(self):
+        """根據查詢條件從資料庫獲取資料並填入表格"""
+        start_date = self.start_date_entry.get()
+        end_date = self.end_date_entry.get()
+        name_query = self.name_search_entry.get()
+        desc_query = self.desc_search_entry.get()
+
+        # 簡單的日期格式驗證
+        try:
+            if start_date: datetime.strptime(start_date, "%Y-%m-%d")
+            if end_date: datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            messagebox.showerror("格式錯誤", "日期格式應為 YYYY-MM-DD。")
+            return
+
+        records = self.db.search_events(start_date, end_date, name_query, desc_query)
+        self.populate_tree(records)
+
+    def reset_search(self):
+        """重設所有查詢條件並重新查詢"""
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        self.start_date_entry.delete(0, tk.END)
+        self.start_date_entry.insert(0, today_str)
+        self.end_date_entry.delete(0, tk.END)
+        self.end_date_entry.insert(0, today_str)
+        self.name_search_entry.delete(0, tk.END)
+        self.desc_search_entry.delete(0, tk.END)
+        self.perform_search()
+
+    def populate_tree(self, records):
+        """將傳入的紀錄填入Treeview"""
         for i in self.tree.get_children():
             self.tree.delete(i)
         
-        # 獲取所有紀錄
-        records = self.db.get_all_events()
         for row in records:
             event_id, name, desc, start_str, end_str = row
-            
-            # 格式化時間與計算時長
             try:
                 start_dt = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
                 start_date = start_dt.strftime("%Y-%m-%d")
@@ -231,24 +298,18 @@ class HistoryWindow:
                     end_time = end_dt.strftime("%H:%M:%S")
                     duration_delta = end_dt - start_dt
                     
-                    # 格式化時長
                     s = duration_delta.total_seconds()
                     hours, remainder = divmod(s, 3600)
                     minutes, seconds = divmod(remainder, 60)
                     duration = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
                 else:
-                    end_date = "N/A"
-                    end_time = "N/A"
-                    duration = "進行中"
+                    end_date = "N/A"; end_time = "N/A"; duration = "進行中"
 
-                self.tree.insert('', tk.END, values=(event_id, name, desc, start_date, start_time, end_date, end_time, duration))
-            
+                self.tree.insert('', tk.END, values=(event_id, name, desc or "", start_date, start_time, end_date, end_time, duration))
             except (ValueError, TypeError) as e:
                 print(f"處理紀錄 ID {event_id} 時出錯: {e}")
 
-
     def delete_selected(self):
-        """刪除在Treeview中選定的項目"""
         selected_items = self.tree.selection()
         if not selected_items:
             messagebox.showwarning("警告", "請先選擇要刪除的項目。")
@@ -256,17 +317,11 @@ class HistoryWindow:
         
         if messagebox.askyesno("確認刪除", f"您確定要刪除選定的 {len(selected_items)} 個項目嗎？此操作無法復原。"):
             for item in selected_items:
-                # 從Treeview的values中獲取ID
                 item_values = self.tree.item(item, 'values')
                 event_id = item_values[0]
-                
-                # 從資料庫刪除
                 self.db.delete_event(event_id)
-                # 從Treeview中刪除
                 self.tree.delete(item)
-            
             messagebox.showinfo("成功", "選定的項目已被刪除。")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
