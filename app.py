@@ -1,4 +1,4 @@
-# app.py (已修正歷史視窗日期欄位和日曆樣式)
+# app.py (已修正查詢框過高問題)
 
 import sys
 from datetime import datetime
@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QDialog, QCalendarWidget
+    QHeaderView, QMessageBox, QDialog, QCalendarWidget, QGroupBox
 )
 
 # --- 全局樣式表 (QSS) ---
@@ -78,6 +78,21 @@ APP_STYLESHEET = """
         font-size: 16pt;
         font-weight: bold;
         color: #4DB6AC;
+    }
+    QFormLayout QLabel {
+        text-align: left;
+    }
+    QGroupBox {
+        font-weight: bold;
+        border: 1px solid #555555;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        padding: 0 5px;
+        left: 10px;
     }
 """
 
@@ -199,19 +214,26 @@ class HistoryWindow(QWidget):
         self.setStyleSheet(APP_STYLESHEET)
         self.resize(1000, 600)
         
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
         
-        search_layout = QFormLayout()
-        self.start_date_entry = QLineEdit(self)
-        self.end_date_entry = QLineEdit(self)
+        search_groupbox = QGroupBox("查詢條件")
+        
+        search_panel_layout = QHBoxLayout(search_groupbox)
+        search_panel_layout.setSpacing(25)
+
+        text_search_layout = QFormLayout()
+        text_search_layout.setSpacing(10)
         self.name_search_entry = QLineEdit(self)
         self.desc_search_entry = QLineEdit(self)
+        text_search_layout.addRow("事件名稱", self.name_search_entry)
+        text_search_layout.addRow("說明", self.desc_search_entry)
 
-        # === 修正 1: 設定日期欄位的固定寬度 ===
-        self.start_date_entry.setFixedWidth(150)
-        self.end_date_entry.setFixedWidth(150)
-        
-        # === 修正 2: 設定日期欄位的預設值為當天 ===
+        date_search_layout = QFormLayout()
+        date_search_layout.setSpacing(10)
+        self.start_date_entry = QLineEdit(self)
+        self.end_date_entry = QLineEdit(self)
+        self.start_date_entry.setFixedWidth(120)
+        self.end_date_entry.setFixedWidth(120)
         today_str = datetime.now().strftime("%Y-%m-%d")
         self.start_date_entry.setText(today_str)
         self.end_date_entry.setText(today_str)
@@ -222,30 +244,33 @@ class HistoryWindow(QWidget):
         end_date_btn.setFixedWidth(40)
         start_date_btn.clicked.connect(lambda: self.open_calendar(self.start_date_entry))
         end_date_btn.clicked.connect(lambda: self.open_calendar(self.end_date_entry))
+
+        start_date_h_layout = QHBoxLayout()
+        start_date_h_layout.setContentsMargins(0,0,0,0)
+        start_date_h_layout.addWidget(self.start_date_entry)
+        start_date_h_layout.addWidget(start_date_btn)
         
-        start_date_layout = QHBoxLayout()
-        start_date_layout.addWidget(self.start_date_entry)
-        start_date_layout.addWidget(start_date_btn)
-        start_date_layout.addStretch() # 添加彈簧，防止拉伸
+        end_date_h_layout = QHBoxLayout()
+        end_date_h_layout.setContentsMargins(0,0,0,0)
+        end_date_h_layout.addWidget(self.end_date_entry)
+        end_date_h_layout.addWidget(end_date_btn)
+
+        date_search_layout.addRow("開始日期", start_date_h_layout)
+        date_search_layout.addRow("結束日期", end_date_h_layout)
         
-        end_date_layout = QHBoxLayout()
-        end_date_layout.addWidget(self.end_date_entry)
-        end_date_layout.addWidget(end_date_btn)
-        end_date_layout.addStretch() # 添加彈簧
-        
-        search_layout.addRow("開始日期:", start_date_layout)
-        search_layout.addRow("結束日期:", end_date_layout)
-        search_layout.addRow("事件名稱:", self.name_search_entry)
-        search_layout.addRow("說明:", self.desc_search_entry)
-        
-        search_btn_layout = QHBoxLayout()
+        button_layout = QVBoxLayout()
+        button_layout.setSpacing(10)
         search_btn = QPushButton("執行查詢", objectName="AccentButton")
         reset_btn = QPushButton("重設條件")
-        search_btn_layout.addWidget(search_btn)
-        search_btn_layout.addWidget(reset_btn)
-        search_btn_layout.addStretch()
-        search_layout.addRow(search_btn_layout)
+        button_layout.addWidget(search_btn)
+        button_layout.addWidget(reset_btn)
+        button_layout.addStretch()
 
+        search_panel_layout.addLayout(text_search_layout)
+        search_panel_layout.addLayout(date_search_layout)
+        search_panel_layout.addStretch()
+        search_panel_layout.addLayout(button_layout)
+        
         self.table = QTableWidget(self)
         self.columns = {'id': 'ID', 'name': '事件名稱', 'desc': '說明', 'start_date': '開始日期', 'start_time': '開始時間', 'end_date': '結束日期', 'end_time': '結束時間', 'duration': '時長'}
         self.table.setColumnCount(len(self.columns))
@@ -264,9 +289,10 @@ class HistoryWindow(QWidget):
         bottom_layout.addStretch()
         bottom_layout.addWidget(close_btn)
         
-        layout.addLayout(search_layout)
-        layout.addWidget(self.table)
-        layout.addLayout(bottom_layout)
+        # === 修改：使用帶有拉伸因子的 addWidget ===
+        main_layout.addWidget(search_groupbox, 0) # stretch = 0, 不會垂直拉伸
+        main_layout.addWidget(self.table, 1)      # stretch = 1, 會佔據所有可用垂直空間
+        main_layout.addLayout(bottom_layout)
         
         search_btn.clicked.connect(self.perform_search)
         reset_btn.clicked.connect(self.reset_search)
@@ -275,57 +301,27 @@ class HistoryWindow(QWidget):
 
         self.perform_search()
 
+    # ... (後續所有方法保持不變) ...
     def open_calendar(self, target_entry):
         dialog = QDialog(self)
         dialog.setWindowTitle("選擇日期")
-        
         cal = QCalendarWidget(dialog)
-        
-        # === 修正 3: 為日曆定義詳細且清晰的 QSS 樣式 ===
         CALENDAR_STYLESHEET = """
-            QCalendarWidget QWidget { 
-                background-color: #3C3C3C; 
-                alternate-background-color: #4DB6AC; /* 選中日期的背景 */
-            }
-            QCalendarWidget QToolButton { 
-                color: #EAEAEA; 
-                background-color: #2E2E2E;
-                border: none;
-                padding: 8px;
-            }
-            QCalendarWidget QToolButton:hover {
-                background-color: #4A4A4A;
-            }
-            QCalendarWidget QAbstractItemView:enabled {
-                color: #EAEAEA; /* 日期數字的顏色 */
-                selection-background-color: #4DB6AC; /* 選中日期的背景 */
-                selection-color: #2E2E2E; /* 選中日期數字的顏色 */
-            }
-            QCalendarWidget QWidget#qt_calendar_navigationbar {
-                background-color: #2E2E2E;
-            }
+            QCalendarWidget QWidget { background-color: #3C3C3C; alternate-background-color: #4DB6AC; }
+            QCalendarWidget QToolButton { color: #EAEAEA; background-color: #2E2E2E; border: none; padding: 8px; }
+            QCalendarWidget QToolButton:hover { background-color: #4A4A4A; }
+            QCalendarWidget QAbstractItemView:enabled { color: #EAEAEA; selection-background-color: #4DB6AC; selection-color: #2E2E2E; }
+            QCalendarWidget QWidget#qt_calendar_navigationbar { background-color: #2E2E2E; }
         """
         cal.setStyleSheet(CALENDAR_STYLESHEET)
-        
-        # 讓日曆預設顯示目前輸入框中的日期
         try:
             current_date_str = target_entry.text()
             current_date = datetime.strptime(current_date_str, "%Y-%m-%d")
             cal.setSelectedDate(current_date)
-        except ValueError:
-            pass # 如果格式不對或為空，則忽略
-        
-        cal.clicked.connect(lambda date: (
-            target_entry.setText(date.toString("yyyy-MM-dd")),
-            dialog.accept()
-        ))
-        
-        layout = QVBoxLayout()
-        layout.addWidget(cal)
-        dialog.setLayout(layout)
-        
+        except ValueError: pass
+        cal.clicked.connect(lambda date: (target_entry.setText(date.toString("yyyy-MM-dd")), dialog.accept()))
+        layout = QVBoxLayout(); layout.addWidget(cal); dialog.setLayout(layout)
         dialog.exec()
-
     def perform_search(self):
         start_date = self.start_date_entry.text() or None
         end_date = self.end_date_entry.text() or None
@@ -333,7 +329,6 @@ class HistoryWindow(QWidget):
         desc_query = self.desc_search_entry.text() or None
         records = self.db.search_events(start_date, end_date, name_query, desc_query)
         self.populate_table(records)
-
     def populate_table(self, records):
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(records))
@@ -348,29 +343,24 @@ class HistoryWindow(QWidget):
                 duration = f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
             else:
                 end_date, end_time, duration = "N/A", "N/A", "進行中"
-
             values = (str(event_id), name, desc or "", start_date, start_time, end_date, end_time, duration)
             for j, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 if j == 0: item.setData(Qt.ItemDataRole.DisplayRole, int(value))
                 self.table.setItem(i, j, item)
         self.table.setSortingEnabled(True)
-
     def reset_search(self):
-        # === 修正 2 (續): 重設時也恢復為當天日期 ===
         today_str = datetime.now().strftime("%Y-%m-%d")
         self.start_date_entry.setText(today_str)
         self.end_date_entry.setText(today_str)
         self.name_search_entry.clear()
         self.desc_search_entry.clear()
         self.perform_search()
-
     def delete_selected(self):
         selected_rows = sorted(list(set(index.row() for index in self.table.selectedIndexes())), reverse=True)
         if not selected_rows:
             QMessageBox.warning(self, "警告", "請先選擇要刪除的項目。")
             return
-            
         reply = QMessageBox.question(self, "確認刪除", f"您確定要刪除選定的 {len(selected_rows)} 個項目嗎？")
         if reply == QMessageBox.StandardButton.Yes:
             for row in selected_rows:
