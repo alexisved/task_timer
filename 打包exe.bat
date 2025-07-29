@@ -1,0 +1,1 @@
+pyinstaller --onefile --windowed --icon="timer.png" --add-data "timer.png;." app.py

@@ -1,7 +1,7 @@
-# app.py (最終版本 - 已加入應用程式圖示)
+# app.py (最終打包版本 - 已加入 resource_path 函式)
 
 import sys
-import os # 導入 os 模組來檢查檔案是否存在
+import os
 from datetime import datetime
 from database import DatabaseManager
 
@@ -11,8 +11,20 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QDialog, QCalendarWidget, QGroupBox
 )
-# === 新增：導入 QIcon ===
 from PySide6.QtGui import QIcon
+
+# --- 助手函式：獲取資源的絕對路徑 ---
+# 這個函式是為了確保打包成 .exe 後，程式依然能找到 timer.png
+def resource_path(relative_path):
+    """ 獲取打包後資源的正確路徑 """
+    try:
+        # PyInstaller 創建的臨時資料夾路徑
+        base_path = sys._MEIPASS
+    except Exception:
+        # 在一般開發環境中，使用目前的檔案路徑
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 # --- 全局樣式表 (QSS) ---
 # (此部分保持不變)
@@ -355,12 +367,11 @@ class HistoryWindow(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # === 修改：設定應用程式圖示 ===
-    icon_path = "timer.png"
+    # === 使用助手函式來設定圖示 ===
+    icon_path = resource_path("timer.png")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
     else:
-        # 如果找不到圖示，在終端機中打印一條警告，但程式仍會正常運行
         print(f"警告：找不到圖示檔案 '{icon_path}'，將使用預設圖示。")
 
     window = TimeTrackerApp()
