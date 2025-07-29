@@ -1,4 +1,4 @@
-# app.py (已修正按鈕禁用狀態顯示問題)
+# app.py (已修正歷史視窗日期欄位和日曆樣式)
 
 import sys
 from datetime import datetime
@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QHeaderView, QMessageBox, QDialog, QCalendarWidget
 )
 
-# --- 全局樣式表 (QSS)，類似 CSS ---
+# --- 全局樣式表 (QSS) ---
+# (此部分保持不變)
 APP_STYLESHEET = """
     QWidget {
         background-color: #2E2E2E;
@@ -41,13 +42,11 @@ APP_STYLESHEET = """
     QPushButton:pressed {
         background-color: #555555;
     }
-    /* === 新增：一般按鈕的禁用樣式 === */
     QPushButton:disabled {
         background-color: #333333;
         color: #777777;
         border: 1px solid #444444;
     }
-    
     QPushButton#AccentButton {
         background-color: #4DB6AC;
         color: #2E2E2E;
@@ -55,12 +54,10 @@ APP_STYLESHEET = """
     QPushButton#AccentButton:hover {
         background-color: #5DCABF;
     }
-    /* === 新增：強調按鈕的禁用樣式 === */
     QPushButton#AccentButton:disabled {
-        background-color: #3A6B65; /* 一個更暗、去飽和度的青色 */
-        color: #888888;           /* 暗淡的文字顏色 */
+        background-color: #3A6B65;
+        color: #888888;
     }
-
     QTableWidget {
         background-color: #3C3C3C;
         border: 1px solid #555555;
@@ -91,32 +88,25 @@ class TimeTrackerApp(QWidget):
         self.db = DatabaseManager()
         self.timer_running = False
         self.current_event_id = None
-        
         self.init_ui()
-
     def init_ui(self):
         self.setWindowTitle("事件計時器")
         self.setStyleSheet(APP_STYLESHEET)
-        
         layout = QVBoxLayout(self)
         layout.setContentsMargins(25, 25, 25, 25)
         layout.setSpacing(15)
-
         title_label = QLabel("事件計時器", self)
         title_label.setObjectName("TitleLabel")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
         self.event_name_entry = QLineEdit(self)
         self.description_entry = QLineEdit(self)
         form_layout.addRow("事件名稱 (必填):", self.event_name_entry)
         form_layout.addRow("說明 (選填):", self.description_entry)
-
         self.timer_label = QLabel("00:00:00", self)
         self.timer_label.setObjectName("TimerLabel")
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
         self.start_button = QPushButton("開始", self)
@@ -125,48 +115,38 @@ class TimeTrackerApp(QWidget):
         self.finish_button.setEnabled(False)
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.finish_button)
-
         self.history_button = QPushButton("查詢過去的事件", self)
-
         layout.addWidget(title_label)
         layout.addLayout(form_layout)
         layout.addWidget(self.timer_label)
         layout.addLayout(button_layout)
         layout.addWidget(self.history_button)
-
         self.start_button.clicked.connect(self.start_timer)
         self.finish_button.clicked.connect(self.finish_timer)
         self.history_button.clicked.connect(self.open_history_window)
-        
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timer)
-
     def start_timer(self):
         event_name = self.event_name_entry.text().strip()
         if not event_name:
             QMessageBox.critical(self, "錯誤", "事件名稱為必填欄位！")
             return
-            
         description = self.description_entry.text().strip()
         self.start_time = datetime.now()
         start_time_str = self.start_time.strftime("%Y-%m-%d %H:%M:%S")
         self.current_event_id = self.db.insert_event(event_name, description, start_time_str)
-
         self.timer_running = True
         self.reminder_shown = False
         self.timer.start(1000)
         self.update_ui_for_timer_start()
-
     def update_timer(self):
         elapsed_seconds = int((datetime.now() - self.start_time).total_seconds())
         hours, remainder = divmod(elapsed_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         self.timer_label.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
-        
         if 25 * 60 <= elapsed_seconds < 30 * 60 and not self.reminder_shown:
             QMessageBox.information(self, "休息提醒", "已經25分鐘了，該休息一下囉！\n(此提醒只會出現一次)")
             self.reminder_shown = True
-
     def finish_timer(self):
         self.timer.stop()
         self.timer_running = False
@@ -175,31 +155,26 @@ class TimeTrackerApp(QWidget):
         QMessageBox.information(self, "完成", f"事件 '{self.event_name_entry.text()}' 已紀錄！")
         self.update_ui_for_timer_stop()
         self.reset_fields()
-
     def update_ui_for_timer_start(self):
         self.start_button.setEnabled(False)
         self.finish_button.setEnabled(True)
         self.history_button.setEnabled(False)
         self.event_name_entry.setEnabled(False)
         self.description_entry.setEnabled(False)
-
     def update_ui_for_timer_stop(self):
         self.start_button.setEnabled(True)
         self.finish_button.setEnabled(False)
         self.history_button.setEnabled(True)
         self.event_name_entry.setEnabled(True)
         self.description_entry.setEnabled(True)
-
     def reset_fields(self):
         self.event_name_entry.clear()
         self.description_entry.clear()
         self.timer_label.setText("00:00:00")
         self.current_event_id = None
-
     def open_history_window(self):
         self.history_win = HistoryWindow(self.db)
         self.history_win.show()
-
     def closeEvent(self, event):
         if self.timer_running:
             reply = QMessageBox.question(self, "警告", "計時器仍在執行中，確定要結束嗎？\n(目前的進度將不會被儲存結束時間)")
@@ -214,7 +189,6 @@ class TimeTrackerApp(QWidget):
 
 
 class HistoryWindow(QWidget):
-    # ... (此 class 的所有 Python 程式碼保持不變) ...
     def __init__(self, db_manager):
         super().__init__()
         self.db = db_manager
@@ -232,6 +206,15 @@ class HistoryWindow(QWidget):
         self.end_date_entry = QLineEdit(self)
         self.name_search_entry = QLineEdit(self)
         self.desc_search_entry = QLineEdit(self)
+
+        # === 修正 1: 設定日期欄位的固定寬度 ===
+        self.start_date_entry.setFixedWidth(150)
+        self.end_date_entry.setFixedWidth(150)
+        
+        # === 修正 2: 設定日期欄位的預設值為當天 ===
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        self.start_date_entry.setText(today_str)
+        self.end_date_entry.setText(today_str)
         
         start_date_btn = QPushButton("📅")
         end_date_btn = QPushButton("📅")
@@ -243,10 +226,12 @@ class HistoryWindow(QWidget):
         start_date_layout = QHBoxLayout()
         start_date_layout.addWidget(self.start_date_entry)
         start_date_layout.addWidget(start_date_btn)
+        start_date_layout.addStretch() # 添加彈簧，防止拉伸
         
         end_date_layout = QHBoxLayout()
         end_date_layout.addWidget(self.end_date_entry)
         end_date_layout.addWidget(end_date_btn)
+        end_date_layout.addStretch() # 添加彈簧
         
         search_layout.addRow("開始日期:", start_date_layout)
         search_layout.addRow("結束日期:", end_date_layout)
@@ -258,6 +243,7 @@ class HistoryWindow(QWidget):
         reset_btn = QPushButton("重設條件")
         search_btn_layout.addWidget(search_btn)
         search_btn_layout.addWidget(reset_btn)
+        search_btn_layout.addStretch()
         search_layout.addRow(search_btn_layout)
 
         self.table = QTableWidget(self)
@@ -294,7 +280,40 @@ class HistoryWindow(QWidget):
         dialog.setWindowTitle("選擇日期")
         
         cal = QCalendarWidget(dialog)
-        cal.setStyleSheet("QCalendarWidget { background-color: #3C3C3C; } QToolButton { color: white; }")
+        
+        # === 修正 3: 為日曆定義詳細且清晰的 QSS 樣式 ===
+        CALENDAR_STYLESHEET = """
+            QCalendarWidget QWidget { 
+                background-color: #3C3C3C; 
+                alternate-background-color: #4DB6AC; /* 選中日期的背景 */
+            }
+            QCalendarWidget QToolButton { 
+                color: #EAEAEA; 
+                background-color: #2E2E2E;
+                border: none;
+                padding: 8px;
+            }
+            QCalendarWidget QToolButton:hover {
+                background-color: #4A4A4A;
+            }
+            QCalendarWidget QAbstractItemView:enabled {
+                color: #EAEAEA; /* 日期數字的顏色 */
+                selection-background-color: #4DB6AC; /* 選中日期的背景 */
+                selection-color: #2E2E2E; /* 選中日期數字的顏色 */
+            }
+            QCalendarWidget QWidget#qt_calendar_navigationbar {
+                background-color: #2E2E2E;
+            }
+        """
+        cal.setStyleSheet(CALENDAR_STYLESHEET)
+        
+        # 讓日曆預設顯示目前輸入框中的日期
+        try:
+            current_date_str = target_entry.text()
+            current_date = datetime.strptime(current_date_str, "%Y-%m-%d")
+            cal.setSelectedDate(current_date)
+        except ValueError:
+            pass # 如果格式不對或為空，則忽略
         
         cal.clicked.connect(lambda date: (
             target_entry.setText(date.toString("yyyy-MM-dd")),
@@ -338,8 +357,10 @@ class HistoryWindow(QWidget):
         self.table.setSortingEnabled(True)
 
     def reset_search(self):
-        self.start_date_entry.clear()
-        self.end_date_entry.clear()
+        # === 修正 2 (續): 重設時也恢復為當天日期 ===
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        self.start_date_entry.setText(today_str)
+        self.end_date_entry.setText(today_str)
         self.name_search_entry.clear()
         self.desc_search_entry.clear()
         self.perform_search()
