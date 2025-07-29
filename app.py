@@ -1,6 +1,7 @@
-# app.py (已修正查詢框過高問題)
+# app.py (最終版本 - 已加入應用程式圖示)
 
 import sys
+import os # 導入 os 模組來檢查檔案是否存在
 from datetime import datetime
 from database import DatabaseManager
 
@@ -10,6 +11,8 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QDialog, QCalendarWidget, QGroupBox
 )
+# === 新增：導入 QIcon ===
+from PySide6.QtGui import QIcon
 
 # --- 全局樣式表 (QSS) ---
 # (此部分保持不變)
@@ -202,32 +205,26 @@ class TimeTrackerApp(QWidget):
             self.db.close()
             event.accept()
 
-
 class HistoryWindow(QWidget):
+    # ... (此 class 的所有 Python 程式碼保持不變) ...
     def __init__(self, db_manager):
         super().__init__()
         self.db = db_manager
         self.init_ui()
-
     def init_ui(self):
         self.setWindowTitle("歷史事件紀錄")
         self.setStyleSheet(APP_STYLESHEET)
         self.resize(1000, 600)
-        
         main_layout = QVBoxLayout(self)
-        
         search_groupbox = QGroupBox("查詢條件")
-        
         search_panel_layout = QHBoxLayout(search_groupbox)
         search_panel_layout.setSpacing(25)
-
         text_search_layout = QFormLayout()
         text_search_layout.setSpacing(10)
         self.name_search_entry = QLineEdit(self)
         self.desc_search_entry = QLineEdit(self)
         text_search_layout.addRow("事件名稱", self.name_search_entry)
         text_search_layout.addRow("說明", self.desc_search_entry)
-
         date_search_layout = QFormLayout()
         date_search_layout.setSpacing(10)
         self.start_date_entry = QLineEdit(self)
@@ -237,27 +234,22 @@ class HistoryWindow(QWidget):
         today_str = datetime.now().strftime("%Y-%m-%d")
         self.start_date_entry.setText(today_str)
         self.end_date_entry.setText(today_str)
-        
         start_date_btn = QPushButton("📅")
         end_date_btn = QPushButton("📅")
         start_date_btn.setFixedWidth(40)
         end_date_btn.setFixedWidth(40)
         start_date_btn.clicked.connect(lambda: self.open_calendar(self.start_date_entry))
         end_date_btn.clicked.connect(lambda: self.open_calendar(self.end_date_entry))
-
         start_date_h_layout = QHBoxLayout()
         start_date_h_layout.setContentsMargins(0,0,0,0)
         start_date_h_layout.addWidget(self.start_date_entry)
         start_date_h_layout.addWidget(start_date_btn)
-        
         end_date_h_layout = QHBoxLayout()
         end_date_h_layout.setContentsMargins(0,0,0,0)
         end_date_h_layout.addWidget(self.end_date_entry)
         end_date_h_layout.addWidget(end_date_btn)
-
         date_search_layout.addRow("開始日期", start_date_h_layout)
         date_search_layout.addRow("結束日期", end_date_h_layout)
-        
         button_layout = QVBoxLayout()
         button_layout.setSpacing(10)
         search_btn = QPushButton("執行查詢", objectName="AccentButton")
@@ -265,12 +257,10 @@ class HistoryWindow(QWidget):
         button_layout.addWidget(search_btn)
         button_layout.addWidget(reset_btn)
         button_layout.addStretch()
-
         search_panel_layout.addLayout(text_search_layout)
         search_panel_layout.addLayout(date_search_layout)
         search_panel_layout.addStretch()
         search_panel_layout.addLayout(button_layout)
-        
         self.table = QTableWidget(self)
         self.columns = {'id': 'ID', 'name': '事件名稱', 'desc': '說明', 'start_date': '開始日期', 'start_time': '開始時間', 'end_date': '結束日期', 'end_time': '結束時間', 'duration': '時長'}
         self.table.setColumnCount(len(self.columns))
@@ -281,27 +271,20 @@ class HistoryWindow(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(list(self.columns.keys()).index('id'), QHeaderView.ResizeMode.ResizeToContents)
         self.table.setSortingEnabled(True)
-
         bottom_layout = QHBoxLayout()
         delete_btn = QPushButton("刪除選定項目")
         close_btn = QPushButton("關閉")
         bottom_layout.addWidget(delete_btn)
         bottom_layout.addStretch()
         bottom_layout.addWidget(close_btn)
-        
-        # === 修改：使用帶有拉伸因子的 addWidget ===
-        main_layout.addWidget(search_groupbox, 0) # stretch = 0, 不會垂直拉伸
-        main_layout.addWidget(self.table, 1)      # stretch = 1, 會佔據所有可用垂直空間
+        main_layout.addWidget(search_groupbox, 0)
+        main_layout.addWidget(self.table, 1)
         main_layout.addLayout(bottom_layout)
-        
         search_btn.clicked.connect(self.perform_search)
         reset_btn.clicked.connect(self.reset_search)
         delete_btn.clicked.connect(self.delete_selected)
         close_btn.clicked.connect(self.close)
-
         self.perform_search()
-
-    # ... (後續所有方法保持不變) ...
     def open_calendar(self, target_entry):
         dialog = QDialog(self)
         dialog.setWindowTitle("選擇日期")
@@ -369,9 +352,17 @@ class HistoryWindow(QWidget):
                 self.table.removeRow(row)
             QMessageBox.information(self, "成功", "選定的項目已被刪除。")
 
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    
+    # === 修改：設定應用程式圖示 ===
+    icon_path = "timer.png"
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    else:
+        # 如果找不到圖示，在終端機中打印一條警告，但程式仍會正常運行
+        print(f"警告：找不到圖示檔案 '{icon_path}'，將使用預設圖示。")
+
     window = TimeTrackerApp()
     window.show()
     sys.exit(app.exec())
