@@ -1,4 +1,7 @@
 # app.py
+
+# ... (最上方的 import 和 TimeTrackerApp class 保持不變) ...
+# 請直接複製貼上您現有的 TimeTrackerApp class 程式碼
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
@@ -150,138 +153,169 @@ class TimeTrackerApp:
         else:
             self.db.close()
             self.root.destroy()
+# -------------------- 以下是更新後的 HistoryWindow --------------------
 
 class HistoryWindow:
     def __init__(self, parent, db_manager):
         self.db = db_manager
         self.window = tk.Toplevel(parent)
         self.window.title("歷史事件紀錄")
-        # Bug Fix: 增加視窗寬度以容納所有欄位和查詢元件
         self.window.geometry("1000x600")
 
+        # 新增：排序狀態變數
+        self.sort_column = "start_date" # 預設排序欄位
+        self.sort_reverse = True      # 預設降冪 (最新優先)
+
         self.create_widgets()
-        self.perform_search() # 初始載入時執行一次預設查詢
+        self.perform_search() 
 
     def create_widgets(self):
-        """創建歷史視窗的所有元件，包含查詢區和結果區"""
         main_frame = ttk.Frame(self.window, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         main_frame.grid_rowconfigure(1, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)
 
-        # --- 查詢條件區 ---
+        # --- 查詢條件區 (與前版相同) ---
         search_frame = ttk.LabelFrame(main_frame, text="查詢條件", padding="10")
         search_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        
-        # 日期
         today_str = datetime.now().strftime("%Y-%m-%d")
         ttk.Label(search_frame, text="開始日期:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.start_date_entry = ttk.Entry(search_frame)
         self.start_date_entry.grid(row=0, column=1, padx=5, pady=5)
         self.start_date_entry.insert(0, today_str)
         ttk.Button(search_frame, text="📅", width=3, command=lambda: self.open_calendar(self.start_date_entry)).grid(row=0, column=2)
-
         ttk.Label(search_frame, text="結束日期:").grid(row=0, column=3, padx=5, pady=5, sticky="w")
         self.end_date_entry = ttk.Entry(search_frame)
         self.end_date_entry.grid(row=0, column=4, padx=5, pady=5)
         self.end_date_entry.insert(0, today_str)
         ttk.Button(search_frame, text="📅", width=3, command=lambda: self.open_calendar(self.end_date_entry)).grid(row=0, column=5)
-
-        # 文字搜尋
         ttk.Label(search_frame, text="事件名稱:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
         self.name_search_entry = ttk.Entry(search_frame, width=25)
         self.name_search_entry.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
-
         ttk.Label(search_frame, text="說明:").grid(row=1, column=3, padx=5, pady=5, sticky="w")
         self.desc_search_entry = ttk.Entry(search_frame, width=25)
         self.desc_search_entry.grid(row=1, column=4, columnspan=2, padx=5, pady=5, sticky="ew")
-        
-        # 查詢按鈕
         search_button_frame = ttk.Frame(search_frame)
         search_button_frame.grid(row=0, column=6, rowspan=2, padx=20)
         ttk.Button(search_button_frame, text="執行查詢", command=self.perform_search).pack(pady=2, fill=tk.X)
         ttk.Button(search_button_frame, text="重設條件", command=self.reset_search).pack(pady=2, fill=tk.X)
-
 
         # --- Treeview (結果表格) ---
         tree_frame = ttk.Frame(main_frame)
         tree_frame.grid(row=1, column=0, sticky="nsew")
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
-
-        columns = ('id', 'name', 'desc', 'start_date', 'start_time', 'end_date', 'end_time', 'duration')
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show='headings')
         
-        # ... (欄位定義與舊版相同)
-        self.tree.heading('id', text='ID'); self.tree.column('id', width=40, anchor=tk.CENTER)
-        self.tree.heading('name', text='事件名稱'); self.tree.column('name', width=150)
-        self.tree.heading('desc', text='說明'); self.tree.column('desc', width=200)
-        self.tree.heading('start_date', text='開始日期'); self.tree.column('start_date', width=100, anchor=tk.CENTER)
-        self.tree.heading('start_time', text='開始時間'); self.tree.column('start_time', width=80, anchor=tk.CENTER)
-        self.tree.heading('end_date', text='結束日期'); self.tree.column('end_date', width=100, anchor=tk.CENTER)
-        self.tree.heading('end_time', text='結束時間'); self.tree.column('end_time', width=80, anchor=tk.CENTER)
-        self.tree.heading('duration', text='時長'); self.tree.column('duration', width=80, anchor=tk.CENTER)
+        # 新增：儲存原始欄位標題
+        self.columns = {
+            'id': 'ID', 'name': '事件名稱', 'desc': '說明',
+            'start_date': '開始日期', 'start_time': '開始時間',
+            'end_date': '結束日期', 'end_time': '結束時間',
+            'duration': '時長'
+        }
+        
+        self.tree = ttk.Treeview(tree_frame, columns=list(self.columns.keys()), show='headings')
+
+        # 修改：動態設定欄位標題和排序命令
+        for col, text in self.columns.items():
+            self.tree.heading(col, text=text, command=lambda c=col: self.sort_by_column(c))
+        
+        self.tree.column('id', width=40, anchor=tk.CENTER)
+        self.tree.column('name', width=150); self.tree.column('desc', width=200)
+        self.tree.column('start_date', width=100, anchor=tk.CENTER)
+        self.tree.column('start_time', width=80, anchor=tk.CENTER)
+        self.tree.column('end_date', width=100, anchor=tk.CENTER)
+        self.tree.column('end_time', width=80, anchor=tk.CENTER)
+        self.tree.column('duration', width=80, anchor=tk.CENTER)
 
         scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
         self.tree.grid(row=0, column=0, sticky='nsew')
         scrollbar.grid(row=0, column=1, sticky='ns')
 
-        # --- 底部按鈕區 ---
+        # --- 底部按鈕區 (與前版相同) ---
         bottom_button_frame = ttk.Frame(main_frame)
         bottom_button_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
         ttk.Button(bottom_button_frame, text="刪除選定項目", command=self.delete_selected).pack(side=tk.LEFT, padx=5)
         ttk.Button(bottom_button_frame, text="關閉", command=self.window.destroy).pack(side=tk.RIGHT, padx=5)
 
-    def open_calendar(self, entry_widget):
-        """打開日曆選擇器並將選定的日期填入指定的 Entry"""
-        def set_date():
-            entry_widget.delete(0, tk.END)
-            entry_widget.insert(0, cal.get_date())
-            top.destroy()
+    def sort_by_column(self, col):
+        """核心排序功能：根據點擊的欄位對Treeview中的項目進行排序"""
+        # 取得所有項目的ID
+        items = list(self.tree.get_children(''))
 
-        top = tk.Toplevel(self.window)
-        try:
-            current_date = datetime.strptime(entry_widget.get(), "%Y-%m-%d")
-        except ValueError:
-            current_date = datetime.now()
+        # 決定排序方向
+        if self.sort_column == col:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.sort_column = col
+            self.sort_reverse = False # 新欄位預設升冪
+
+        # --- 定義各欄位的排序鍵 (key function) ---
+        # 這是實現智慧排序的關鍵
+        def get_sort_key(item_id):
+            values = self.tree.item(item_id)['values']
+            col_index = list(self.columns.keys()).index(col)
+            val = values[col_index]
+
+            if col == 'id':
+                return int(val)
+            if col in ['start_date', 'start_time']:
+                # 合併日期和時間進行比較
+                dt_str = f"{values[3]} {values[4]}"
+                return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+            if col in ['end_date', 'end_time']:
+                if values[5] == "N/A":
+                    return datetime.min # 未完成的項目排在最前
+                dt_str = f"{values[5]} {values[6]}"
+                return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+            if col == 'duration':
+                if val == "進行中":
+                    return -1 # 進行中的項目排最前
+                try:
+                    h, m, s = map(int, val.split(':'))
+                    return h * 3600 + m * 60 + s
+                except:
+                    return 0
+            # 對於'name'和'desc'等文字欄位，直接回傳小寫字串
+            return str(val).lower()
+
+        # 使用自訂的key來排序
+        items.sort(key=get_sort_key, reverse=self.sort_reverse)
+
+        # 將排序後的項目重新插入Treeview
+        for i, item_id in enumerate(items):
+            self.tree.move(item_id, '', i)
         
-        cal = Calendar(top, selectmode='day', year=current_date.year, month=current_date.month, day=current_date.day,
-                       date_pattern='y-mm-dd')
-        cal.pack(pady=10)
-        ttk.Button(top, text="確定", command=set_date).pack()
+        # 更新欄位標題以顯示排序指示符
+        self.update_sort_indicator()
+    
+    def update_sort_indicator(self):
+        """更新所有欄位標題，在被排序的欄位加上箭頭"""
+        arrow = ' ▼' if self.sort_reverse else ' ▲'
+        for col, text in self.columns.items():
+            if col == self.sort_column:
+                self.tree.heading(col, text=text + arrow)
+            else:
+                self.tree.heading(col, text=text)
 
     def perform_search(self):
-        """根據查詢條件從資料庫獲取資料並填入表格"""
         start_date = self.start_date_entry.get()
         end_date = self.end_date_entry.get()
         name_query = self.name_search_entry.get()
         desc_query = self.desc_search_entry.get()
-
-        # 簡單的日期格式驗證
         try:
             if start_date: datetime.strptime(start_date, "%Y-%m-%d")
             if end_date: datetime.strptime(end_date, "%Y-%m-%d")
         except ValueError:
             messagebox.showerror("格式錯誤", "日期格式應為 YYYY-MM-DD。")
             return
-
         records = self.db.search_events(start_date, end_date, name_query, desc_query)
         self.populate_tree(records)
-
-    def reset_search(self):
-        """重設所有查詢條件並重新查詢"""
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        self.start_date_entry.delete(0, tk.END)
-        self.start_date_entry.insert(0, today_str)
-        self.end_date_entry.delete(0, tk.END)
-        self.end_date_entry.insert(0, today_str)
-        self.name_search_entry.delete(0, tk.END)
-        self.desc_search_entry.delete(0, tk.END)
-        self.perform_search()
+        # 查詢後，執行一次預設排序
+        self.sort_by_column(self.sort_column)
 
     def populate_tree(self, records):
-        """將傳入的紀錄填入Treeview"""
         for i in self.tree.get_children():
             self.tree.delete(i)
         
@@ -291,13 +325,11 @@ class HistoryWindow:
                 start_dt = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
                 start_date = start_dt.strftime("%Y-%m-%d")
                 start_time = start_dt.strftime("%H:%M:%S")
-
                 if end_str:
                     end_dt = datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
                     end_date = end_dt.strftime("%Y-%m-%d")
                     end_time = end_dt.strftime("%H:%M:%S")
                     duration_delta = end_dt - start_dt
-                    
                     s = duration_delta.total_seconds()
                     hours, remainder = divmod(s, 3600)
                     minutes, seconds = divmod(remainder, 60)
@@ -308,13 +340,44 @@ class HistoryWindow:
                 self.tree.insert('', tk.END, values=(event_id, name, desc or "", start_date, start_time, end_date, end_time, duration))
             except (ValueError, TypeError) as e:
                 print(f"處理紀錄 ID {event_id} 時出錯: {e}")
+        # 填充完資料後，更新一次排序箭頭
+        self.update_sort_indicator()
+
+
+    # ... 其他方法 (open_calendar, reset_search, delete_selected) 保持不變 ...
+    def open_calendar(self, entry_widget):
+        def set_date():
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, cal.get_date())
+            top.destroy()
+        top = tk.Toplevel(self.window)
+        try:
+            current_date = datetime.strptime(entry_widget.get(), "%Y-%m-%d")
+        except ValueError:
+            current_date = datetime.now()
+        cal = Calendar(top, selectmode='day', year=current_date.year, month=current_date.month, day=current_date.day,
+                       date_pattern='y-mm-dd')
+        cal.pack(pady=10)
+        ttk.Button(top, text="確定", command=set_date).pack()
+
+    def reset_search(self):
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        self.start_date_entry.delete(0, tk.END)
+        self.start_date_entry.insert(0, today_str)
+        self.end_date_entry.delete(0, tk.END)
+        self.end_date_entry.insert(0, today_str)
+        self.name_search_entry.delete(0, tk.END)
+        self.desc_search_entry.delete(0, tk.END)
+        # 重設後，將排序狀態恢復預設
+        self.sort_column = "start_date"
+        self.sort_reverse = True
+        self.perform_search()
 
     def delete_selected(self):
         selected_items = self.tree.selection()
         if not selected_items:
             messagebox.showwarning("警告", "請先選擇要刪除的項目。")
             return
-        
         if messagebox.askyesno("確認刪除", f"您確定要刪除選定的 {len(selected_items)} 個項目嗎？此操作無法復原。"):
             for item in selected_items:
                 item_values = self.tree.item(item, 'values')
