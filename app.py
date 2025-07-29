@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QDialog, QCalendarWidget
 )
-from PySide6.QtGui import QFont
 
 # --- 全局樣式表 (QSS)，類似 CSS ---
 # 這比 Tkinter 的樣式系統強大且直觀得多
