@@ -1,4 +1,4 @@
-# app.py (使用 PySide6 全新重寫)
+# app.py (已修正按鈕禁用狀態顯示問題)
 
 import sys
 from datetime import datetime
@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
 )
 
 # --- 全局樣式表 (QSS)，類似 CSS ---
-# 這比 Tkinter 的樣式系統強大且直觀得多
 APP_STYLESHEET = """
     QWidget {
         background-color: #2E2E2E;
@@ -42,6 +41,13 @@ APP_STYLESHEET = """
     QPushButton:pressed {
         background-color: #555555;
     }
+    /* === 新增：一般按鈕的禁用樣式 === */
+    QPushButton:disabled {
+        background-color: #333333;
+        color: #777777;
+        border: 1px solid #444444;
+    }
+    
     QPushButton#AccentButton {
         background-color: #4DB6AC;
         color: #2E2E2E;
@@ -49,6 +55,12 @@ APP_STYLESHEET = """
     QPushButton#AccentButton:hover {
         background-color: #5DCABF;
     }
+    /* === 新增：強調按鈕的禁用樣式 === */
+    QPushButton#AccentButton:disabled {
+        background-color: #3A6B65; /* 一個更暗、去飽和度的青色 */
+        color: #888888;           /* 暗淡的文字顏色 */
+    }
+
     QTableWidget {
         background-color: #3C3C3C;
         border: 1px solid #555555;
@@ -73,6 +85,7 @@ APP_STYLESHEET = """
 """
 
 class TimeTrackerApp(QWidget):
+    # ... (此 class 的所有 Python 程式碼保持不變) ...
     def __init__(self):
         super().__init__()
         self.db = DatabaseManager()
@@ -85,17 +98,14 @@ class TimeTrackerApp(QWidget):
         self.setWindowTitle("事件計時器")
         self.setStyleSheet(APP_STYLESHEET)
         
-        # --- 主佈局 ---
         layout = QVBoxLayout(self)
         layout.setContentsMargins(25, 25, 25, 25)
         layout.setSpacing(15)
 
-        # 標題
         title_label = QLabel("事件計時器", self)
         title_label.setObjectName("TitleLabel")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # 表單佈局 (用於輸入)
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
         self.event_name_entry = QLineEdit(self)
@@ -103,12 +113,10 @@ class TimeTrackerApp(QWidget):
         form_layout.addRow("事件名稱 (必填):", self.event_name_entry)
         form_layout.addRow("說明 (選填):", self.description_entry)
 
-        # 計時器
         self.timer_label = QLabel("00:00:00", self)
         self.timer_label.setObjectName("TimerLabel")
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # 按鈕佈局
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
         self.start_button = QPushButton("開始", self)
@@ -118,22 +126,18 @@ class TimeTrackerApp(QWidget):
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.finish_button)
 
-        # 歷史紀錄按鈕
         self.history_button = QPushButton("查詢過去的事件", self)
 
-        # --- 組裝佈局 ---
         layout.addWidget(title_label)
         layout.addLayout(form_layout)
         layout.addWidget(self.timer_label)
         layout.addLayout(button_layout)
         layout.addWidget(self.history_button)
 
-        # --- 連接信號與槽 (事件處理) ---
         self.start_button.clicked.connect(self.start_timer)
         self.finish_button.clicked.connect(self.finish_timer)
         self.history_button.clicked.connect(self.open_history_window)
         
-        # --- 計時器 (QTimer) ---
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timer)
 
@@ -150,7 +154,7 @@ class TimeTrackerApp(QWidget):
 
         self.timer_running = True
         self.reminder_shown = False
-        self.timer.start(1000) # 每 1000 毫秒觸發一次
+        self.timer.start(1000)
         self.update_ui_for_timer_start()
 
     def update_timer(self):
@@ -193,7 +197,6 @@ class TimeTrackerApp(QWidget):
         self.current_event_id = None
 
     def open_history_window(self):
-        # 創建並顯示歷史視窗
         self.history_win = HistoryWindow(self.db)
         self.history_win.show()
 
@@ -211,6 +214,7 @@ class TimeTrackerApp(QWidget):
 
 
 class HistoryWindow(QWidget):
+    # ... (此 class 的所有 Python 程式碼保持不變) ...
     def __init__(self, db_manager):
         super().__init__()
         self.db = db_manager
@@ -223,14 +227,12 @@ class HistoryWindow(QWidget):
         
         layout = QVBoxLayout(self)
         
-        # --- 查詢條件區 ---
         search_layout = QFormLayout()
         self.start_date_entry = QLineEdit(self)
         self.end_date_entry = QLineEdit(self)
         self.name_search_entry = QLineEdit(self)
         self.desc_search_entry = QLineEdit(self)
         
-        # 日期選擇按鈕
         start_date_btn = QPushButton("📅")
         end_date_btn = QPushButton("📅")
         start_date_btn.setFixedWidth(40)
@@ -238,7 +240,6 @@ class HistoryWindow(QWidget):
         start_date_btn.clicked.connect(lambda: self.open_calendar(self.start_date_entry))
         end_date_btn.clicked.connect(lambda: self.open_calendar(self.end_date_entry))
         
-        # 將日期輸入框和按鈕放在一個水平佈局中
         start_date_layout = QHBoxLayout()
         start_date_layout.addWidget(self.start_date_entry)
         start_date_layout.addWidget(start_date_btn)
@@ -252,7 +253,6 @@ class HistoryWindow(QWidget):
         search_layout.addRow("事件名稱:", self.name_search_entry)
         search_layout.addRow("說明:", self.desc_search_entry)
         
-        # 查詢/重設按鈕
         search_btn_layout = QHBoxLayout()
         search_btn = QPushButton("執行查詢", objectName="AccentButton")
         reset_btn = QPushButton("重設條件")
@@ -260,7 +260,6 @@ class HistoryWindow(QWidget):
         search_btn_layout.addWidget(reset_btn)
         search_layout.addRow(search_btn_layout)
 
-        # --- 表格 ---
         self.table = QTableWidget(self)
         self.columns = {'id': 'ID', 'name': '事件名稱', 'desc': '說明', 'start_date': '開始日期', 'start_time': '開始時間', 'end_date': '結束日期', 'end_time': '結束時間', 'duration': '時長'}
         self.table.setColumnCount(len(self.columns))
@@ -270,9 +269,8 @@ class HistoryWindow(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(list(self.columns.keys()).index('id'), QHeaderView.ResizeMode.ResizeToContents)
-        self.table.setSortingEnabled(True) # Qt 內建排序！
+        self.table.setSortingEnabled(True)
 
-        # --- 底部按鈕 ---
         bottom_layout = QHBoxLayout()
         delete_btn = QPushButton("刪除選定項目")
         close_btn = QPushButton("關閉")
@@ -280,25 +278,23 @@ class HistoryWindow(QWidget):
         bottom_layout.addStretch()
         bottom_layout.addWidget(close_btn)
         
-        # --- 組裝 ---
         layout.addLayout(search_layout)
         layout.addWidget(self.table)
         layout.addLayout(bottom_layout)
         
-        # --- 信號與槽 ---
         search_btn.clicked.connect(self.perform_search)
         reset_btn.clicked.connect(self.reset_search)
         delete_btn.clicked.connect(self.delete_selected)
         close_btn.clicked.connect(self.close)
 
-        self.perform_search() # 初始載入
+        self.perform_search()
 
     def open_calendar(self, target_entry):
         dialog = QDialog(self)
         dialog.setWindowTitle("選擇日期")
         
         cal = QCalendarWidget(dialog)
-        cal.setStyleSheet("QCalendarWidget { background-color: #3C3C3C; }") # 簡單樣式
+        cal.setStyleSheet("QCalendarWidget { background-color: #3C3C3C; } QToolButton { color: white; }")
         
         cal.clicked.connect(lambda date: (
             target_entry.setText(date.toString("yyyy-MM-dd")),
@@ -320,11 +316,10 @@ class HistoryWindow(QWidget):
         self.populate_table(records)
 
     def populate_table(self, records):
-        self.table.setSortingEnabled(False) # 填充數據時先禁用排序以提高性能
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(len(records))
         for i, row in enumerate(records):
             event_id, name, desc, start_str, end_str = row
-            # ... (時間計算邏輯不變) ...
             start_dt = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
             start_date, start_time = start_dt.strftime("%Y-%m-%d"), start_dt.strftime("%H:%M:%S")
             if end_str:
@@ -338,7 +333,6 @@ class HistoryWindow(QWidget):
             values = (str(event_id), name, desc or "", start_date, start_time, end_date, end_time, duration)
             for j, value in enumerate(values):
                 item = QTableWidgetItem(value)
-                # 對數字ID做特殊處理，方便排序
                 if j == 0: item.setData(Qt.ItemDataRole.DisplayRole, int(value))
                 self.table.setItem(i, j, item)
         self.table.setSortingEnabled(True)
